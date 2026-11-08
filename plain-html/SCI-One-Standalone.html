@@ -39,6 +39,7 @@ const appState = {
 };
 if(!Array.isArray(appState.favorites))appState.favorites=[1,5];
 let demoState = null;
+let activeDemo = document.documentElement.dataset.sciDemoId || new URLSearchParams(location.search).get('demo');
 let pending = false;
 function update(state, key, value) {
   const next = typeof value==='function' ? value(state[key]) : value;
@@ -93,10 +94,41 @@ function drawIcon(data, props={}) {
   if(props.strokeWidth) {p['stroke-width']=props.strokeWidth;delete p.strokeWidth;}
   return el(tag,p,...(children||[]).map(c=>drawIcon(c)));
 }
-function toolUrl(id) {
-  const url=new URL(window.location.href);
-  url.search=''; url.hash=''; url.searchParams.set('demo',id);
-  return url.href;
+function launchTool(tool) {
+  // Copy this document into the new tab, including its embedded CSS and JS.
+  // This avoids navigating to a file:// URL with a query string, which some
+  // managed browsers leave blank. No extra HTML file or network request is needed
+  // when this is the standalone edition.
+  let popup;
+  try {
+    popup=window.open('', '_blank');
+    if(popup) {
+      const page=document.documentElement.cloneNode(true);
+      page.dataset.sciDemoId=String(tool.id);
+      page.querySelector('#root').replaceChildren();
+      const base=page.querySelector('base')||document.createElement('base');
+      base.href=document.baseURI;
+      page.querySelector('head').prepend(base);
+      popup.document.open();
+      popup.document.write('<!doctype html>'+page.outerHTML);
+      popup.document.close();
+      popup.opener=null;
+      popup.focus();
+      return;
+    }
+  } catch {
+    try { popup?.close(); } catch {}
+  }
+  // If a new tab is blocked, the dashboard remains available in this tab.
+  activeDemo=String(tool.id);
+  demoState=null;
+  render();
+}
+function closeTool() {
+  if(document.documentElement.dataset.sciDemoId)window.close();
+  activeDemo=null;
+  demoState=null;
+  render();
 }
 function render() {
   const root=document.getElementById('root');
@@ -199,7 +231,7 @@ function App() {
   function fav(id) {
     setFavorites((f) => f.includes(id) ? f.filter((x) => x !== id) : [...f, id]);
   }
-  const launch = (t) => window.open(toolUrl(t.id), "_blank", "noopener,noreferrer");
+  const launch = (t) => launchTool(t);
   const filtered = tools.filter((t) => (page !== "favorites" || favorites.includes(t.id)) && (!local || `${t.name} ${t.description} ${t.ba}`.toLowerCase().includes(local.toLowerCase())) && (type === "All Types" || type === t.type) && (availability === "All Availability" || availability === t.availability) && (ba === "All BAs" || ba === t.ba));
   const query = q.trim().toLowerCase();
   const supplierMatch = ["Honeywell", "BAE Systems", "L3Harris", "Raytheon", "Boeing"].filter((s) => s.toLowerCase().includes(query));
@@ -228,7 +260,7 @@ function App() {
       setInfo(null);
     } }, /* @__PURE__ */ el(BookOpen, { size: 21 }), " View Documentation ", /* @__PURE__ */ el(ExternalLink, { size: 16 }))));
   }
-  const demoId = new URLSearchParams(location.search).get("demo");
+  const demoId = activeDemo;
   if (demoId) return /* @__PURE__ */ el(Demo, { tool: tools.find((t) => t.id === Number(demoId)) || tools[4] });
   return /* @__PURE__ */ el("div", { className: `app ${compact ? "compact" : ""}` }, /* @__PURE__ */ el("button", { className: "mobile-toggle icon-button", "aria-label": "Toggle navigation", onClick: () => setMobile(!mobile) }, /* @__PURE__ */ el(Menu, null)), /* @__PURE__ */ el("aside", { className: `sidebar ${mobile ? "open" : ""}` }, /* @__PURE__ */ el("button", { className: "brand", onClick: () => go("home") }, "SCI One"), /* @__PURE__ */ el("button", { className: `nav-main home-nav ${page === "home" ? "selected" : ""}`, onClick: () => go("home") }, /* @__PURE__ */ el(Home, null), "Home"), /* @__PURE__ */ el("div", { className: "nav-section" }, /* @__PURE__ */ el("span", { className: "nav-label" }, "CAPABILITIES"), /* @__PURE__ */ el("button", { className: "nav-main", onClick: () => setLife(!life) }, /* @__PURE__ */ el(Box, null), "Lifecycle", /* @__PURE__ */ el(ChevronDown, { className: !life ? "rotated" : "" })), life && /* @__PURE__ */ el("div", { className: "subnav" }, ["Capture", "Pre Award / Pre PO", "Post Award / PO Closeout"].map((n) => /* @__PURE__ */ el("button", { key: n, onClick: () => go("library", n) }, n))), /* @__PURE__ */ el("button", { className: "nav-main", onClick: () => setFunctional(!functional) }, /* @__PURE__ */ el(Layers, null), "Functional", /* @__PURE__ */ el(ChevronDown, { className: !functional ? "rotated" : "" })), functional && /* @__PURE__ */ el("div", { className: "subnav" }, ["Supplier", "Compliance", "Price + Cost", "PR Management", "Business Management"].map((n) => /* @__PURE__ */ el("button", { key: n, className: n === "Supplier" && (tray || page === "library" || page === "supplier") ? "selected" : "", onClick: () => n === "Supplier" ? (setTray(tray ? "" : "Supplier"), setPreview(""), setQ("")) : go("library", n) }, n, n === "Supplier" && /* @__PURE__ */ el(ChevronRight, { size: 18 }))))), /* @__PURE__ */ el("div", { className: "nav-section utility" }, /* @__PURE__ */ el("button", { className: `nav-main ${page === "favorites" ? "selected" : ""}`, onClick: () => go("favorites") }, /* @__PURE__ */ el(Star, null), "Favorites"), /* @__PURE__ */ el("button", { className: `nav-main ${page === "all" ? "selected" : ""}`, onClick: () => go("all") }, /* @__PURE__ */ el(Layers, null), "All Solutions"), /* @__PURE__ */ el("button", { className: `nav-main ${page === "settings" ? "selected" : ""}`, onClick: () => go("settings") }, /* @__PURE__ */ el(Settings, null), "Settings")), /* @__PURE__ */ el("div", { className: "profile" }, /* @__PURE__ */ el("span", { className: "avatar" }, "JH"), /* @__PURE__ */ el("span", null, "Josh Holly"), /* @__PURE__ */ el("button", { "aria-label": "Profile settings", className: "icon-button", onClick: () => go("settings") }, /* @__PURE__ */ el(Settings, null)))), /* @__PURE__ */ el("main", { className: page === "home" ? "home-main" : "interior" }, /* @__PURE__ */ el(Waves, null), page === "home" ? /* @__PURE__ */ el("div", { className: `hero ${q || tray ? "engaged" : ""}` }, /* @__PURE__ */ el("h1", null, "Welcome to SCI One"), /* @__PURE__ */ el("p", null, "Your library of supply chain tools and solutions."), searchField(true), q && /* @__PURE__ */ el(SearchResults, null)) : /* @__PURE__ */ el("header", { className: "topbar" }, searchField()), page !== "home" && q && page !== "search" && /* @__PURE__ */ el("div", { className: "interior-results" }, /* @__PURE__ */ el(SearchResults, null)), tray && /* @__PURE__ */ el("div", { className: "tray-overlay" }, /* @__PURE__ */ el("section", { className: "cap-tray glass" }, /* @__PURE__ */ el("header", null, /* @__PURE__ */ el(Glyph, { icon: Users }), /* @__PURE__ */ el("div", null, /* @__PURE__ */ el("h2", null, "Supplier"), /* @__PURE__ */ el("p", null, "Discover tools for supplier insights, performance,", /* @__PURE__ */ el("br", null), " risk, and collaboration."))), /* @__PURE__ */ el("h3", null, "Sub-Capabilities (6)"), caps.map((n, i) => /* @__PURE__ */ el("button", { className: `cap-row ${preview === n ? "highlight" : ""}`, key: n, onMouseEnter: () => setPreview(n), onFocus: () => setPreview(n), onClick: () => setPreview(n) }, /* @__PURE__ */ el(Glyph, { icon: capIcons[i], tone: ["green", "orange", "blue", "purple", "blue", "purple"][i], small: true }), /* @__PURE__ */ el("b", null, n), /* @__PURE__ */ el(ChevronRight, null)))), preview && /* @__PURE__ */ el("section", { className: "preview-tray glass" }, /* @__PURE__ */ el("header", null, /* @__PURE__ */ el(Glyph, { icon: capIcons[caps.indexOf(preview)] }), /* @__PURE__ */ el("h2", null, preview)), /* @__PURE__ */ el("h3", null, "Top 4 Viewed Tools"), tools.slice(0, 4).map((t) => /* @__PURE__ */ el("button", { className: "preview-tool", key: t.id, onClick: () => launch(t) }, /* @__PURE__ */ el(Glyph, { icon: t.icon, small: true }), /* @__PURE__ */ el("b", null, t.name), /* @__PURE__ */ el(Tags, { tool: t }), /* @__PURE__ */ el(ExternalLink, { size: 20 }))), /* @__PURE__ */ el("button", { className: "all-tools-link", onClick: () => go("library", preview) }, /* @__PURE__ */ el(Layers, null), "All Tools", /* @__PURE__ */ el(ChevronRight, null)))), ["library", "all", "favorites"].includes(page) && /* @__PURE__ */ el("div", { className: "content" }, /* @__PURE__ */ el("div", { className: "breadcrumbs" }, /* @__PURE__ */ el("button", { onClick: () => go("all") }, "Capabilities"), /* @__PURE__ */ el(ChevronRight, null), "Functional", /* @__PURE__ */ el(ChevronRight, null), /* @__PURE__ */ el("button", { onClick: () => {
     setTray("Supplier");
@@ -252,7 +284,7 @@ function Demo({ tool }) {
   const { ba, supplier, period } = demoState;
   const setBa2 = (v) => update(demoState, "ba", v), setSupplier = (v) => update(demoState, "supplier", v), setPeriod = (v) => update(demoState, "period", v);
   const variation = (supplier === "All Suppliers" ? 0 : 2) + (period === "Last Quarter" ? -1 : period === "Last Month" ? 1 : 0);
-  return /* @__PURE__ */ el("div", { className: "demo" }, /* @__PURE__ */ el("header", null, /* @__PURE__ */ el("span", { className: "tableau-mark" }, "\u2723"), /* @__PURE__ */ el("b", null, "tableau"), /* @__PURE__ */ el("span", { className: "demo-label" }, "Illustrative external application"), /* @__PURE__ */ el("button", { className: "clear", onClick: () => window.close() }, "Close Tool ", /* @__PURE__ */ el(X, { size: 16 }))), /* @__PURE__ */ el("main", null, /* @__PURE__ */ el("div", { className: "breadcrumbs" }, ba, /* @__PURE__ */ el(ChevronRight, null), "Supplier Analytics"), /* @__PURE__ */ el("h1", null, ba, " ", tool.name), /* @__PURE__ */ el("p", null, "Supplier Analytics \xB7 Sample data"), /* @__PURE__ */ el("div", { className: "demo-filters" }, [["Business Area", ba, setBa2, bas], ["Supplier", supplier, setSupplier, ["All Suppliers", "Honeywell", "BAE Systems", "L3Harris", "Raytheon", "Boeing"]], ["Time Period", period, setPeriod, ["Last 12 Months", "Last Quarter", "Last Month"]]].map(([l, v, s, opts]) => /* @__PURE__ */ el("label", { key: l }, l, /* @__PURE__ */ el("select", { value: v, onChange: (e) => s(e.target.value) }, opts.map((o) => /* @__PURE__ */ el("option", { key: o }, o)))))), /* @__PURE__ */ el("div", { className: "kpis" }, [[`${(94.2 + variation).toFixed(1)}%`, "On-Time Delivery"], [`${(86.5 + variation).toFixed(1)}%`, "Supplier Quality"], [supplier === "All Suppliers" ? "142" : "1", "Active Suppliers"]].map(([v, l]) => /* @__PURE__ */ el("section", { key: l }, /* @__PURE__ */ el("strong", null, v), /* @__PURE__ */ el("p", null, l), /* @__PURE__ */ el("svg", { viewBox: "0 0 90 35" }, /* @__PURE__ */ el("path", { d: "M1 30L15 18L29 27L43 13L57 19L72 8L85 2", fill: "none", stroke: "#008cff", strokeWidth: "2" }))))), /* @__PURE__ */ el("section", { className: "chart-card" }, /* @__PURE__ */ el("h3", null, "On-Time Delivery by Supplier"), /* @__PURE__ */ el("div", { className: "chart" }, /* @__PURE__ */ el("div", { className: "axis" }, "100%", /* @__PURE__ */ el("span", null, "90%"), /* @__PURE__ */ el("span", null, "80%"), /* @__PURE__ */ el("span", null, "70%"), /* @__PURE__ */ el("span", null, "60%")), /* @__PURE__ */ el("div", { className: "bars" }, ["Honeywell", "BAE Systems", "L3Harris", "Raytheon"].map((s, i) => /* @__PURE__ */ el("div", { className: "bar-column", key: s }, /* @__PURE__ */ el("div", { className: "bar", style: { height: `${[90, 82, 94, 85][i] + variation}%` }, title: `${s}: ${[97.2, 94.1, 98.5, 95.2][i]}%` }, /* @__PURE__ */ el("span", null, [97.2, 94.1, 98.5, 95.2][i], "%")), /* @__PURE__ */ el("label", null, s)))))), /* @__PURE__ */ el("p", { className: "demo-footnote" }, "Demonstration only \xB7 All metrics are illustrative. This sample opens separately to demonstrate SCI One 1.0's library-first experience.")));
+  return /* @__PURE__ */ el("div", { className: "demo" }, /* @__PURE__ */ el("header", null, /* @__PURE__ */ el("span", { className: "tableau-mark" }, "\u2723"), /* @__PURE__ */ el("b", null, "tableau"), /* @__PURE__ */ el("span", { className: "demo-label" }, "Illustrative external application"), /* @__PURE__ */ el("button", { className: "clear", onClick: () => closeTool() }, "Close Tool ", /* @__PURE__ */ el(X, { size: 16 }))), /* @__PURE__ */ el("main", null, /* @__PURE__ */ el("div", { className: "breadcrumbs" }, ba, /* @__PURE__ */ el(ChevronRight, null), "Supplier Analytics"), /* @__PURE__ */ el("h1", null, ba, " ", tool.name), /* @__PURE__ */ el("p", null, "Supplier Analytics \xB7 Sample data"), /* @__PURE__ */ el("div", { className: "demo-filters" }, [["Business Area", ba, setBa2, bas], ["Supplier", supplier, setSupplier, ["All Suppliers", "Honeywell", "BAE Systems", "L3Harris", "Raytheon", "Boeing"]], ["Time Period", period, setPeriod, ["Last 12 Months", "Last Quarter", "Last Month"]]].map(([l, v, s, opts]) => /* @__PURE__ */ el("label", { key: l }, l, /* @__PURE__ */ el("select", { value: v, onChange: (e) => s(e.target.value) }, opts.map((o) => /* @__PURE__ */ el("option", { key: o }, o)))))), /* @__PURE__ */ el("div", { className: "kpis" }, [[`${(94.2 + variation).toFixed(1)}%`, "On-Time Delivery"], [`${(86.5 + variation).toFixed(1)}%`, "Supplier Quality"], [supplier === "All Suppliers" ? "142" : "1", "Active Suppliers"]].map(([v, l]) => /* @__PURE__ */ el("section", { key: l }, /* @__PURE__ */ el("strong", null, v), /* @__PURE__ */ el("p", null, l), /* @__PURE__ */ el("svg", { viewBox: "0 0 90 35" }, /* @__PURE__ */ el("path", { d: "M1 30L15 18L29 27L43 13L57 19L72 8L85 2", fill: "none", stroke: "#008cff", strokeWidth: "2" }))))), /* @__PURE__ */ el("section", { className: "chart-card" }, /* @__PURE__ */ el("h3", null, "On-Time Delivery by Supplier"), /* @__PURE__ */ el("div", { className: "chart" }, /* @__PURE__ */ el("div", { className: "axis" }, "100%", /* @__PURE__ */ el("span", null, "90%"), /* @__PURE__ */ el("span", null, "80%"), /* @__PURE__ */ el("span", null, "70%"), /* @__PURE__ */ el("span", null, "60%")), /* @__PURE__ */ el("div", { className: "bars" }, ["Honeywell", "BAE Systems", "L3Harris", "Raytheon"].map((s, i) => /* @__PURE__ */ el("div", { className: "bar-column", key: s }, /* @__PURE__ */ el("div", { className: "bar", style: { height: `${[90, 82, 94, 85][i] + variation}%` }, title: `${s}: ${[97.2, 94.1, 98.5, 95.2][i]}%` }, /* @__PURE__ */ el("span", null, [97.2, 94.1, 98.5, 95.2][i], "%")), /* @__PURE__ */ el("label", null, s)))))), /* @__PURE__ */ el("p", { className: "demo-footnote" }, "Demonstration only \xB7 All metrics are illustrative. This sample opens separately to demonstrate SCI One 1.0's library-first experience.")));
 }
 render();
 
